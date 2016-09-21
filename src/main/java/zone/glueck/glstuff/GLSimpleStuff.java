@@ -69,36 +69,33 @@ public class GLSimpleStuff implements GLEventListener {
     }
 
     private int vao;
-    private int vbo;
+    private int vboBox;
+    private int vboFloor;
     private int ebo;
     private int program;
     private int stipScaleLocation;
     private int textureUniformLocation;
+    private int mvpLocation;
     private Texture textureImage;
     
     private final float[] box = {
-        -10f, -10f, 0f, 1f, 0f, 0f, 10f, 0f,
-        10f, -10f, 0f, 0f, 1f, 0f, 10f, 0f,
+        -10f, -10f, 0f, 1f, 0f, 0f, 1f, 0f,
+        10f, -10f, 0f, 0f, 1f, 0f, 1f, 0f,
         10f,  10f,  0f, 0f, 1f, 0f, 0f, 0f,
         -10f,  10f,  0f, 0.1f, 0.2f, 0.8f, 0f, 0f
     };
     
-    private final float[] sBox = {
-        -10.5f, -10.5f, 0f, 1f, 0f, 0f, 10f, 0f,
-        10.5f, -10.5f, 0f, 0f, 1f, 0f, 10f, 0f,
-        10.5f,  10.5f,  0f, 0f, 1f, 0f, 0f, 0f,
-        -10.5f,  10.5f,  0f, 0.1f, 0.2f, 0.8f, 0f, 0f  
+    private final float[] floor = {
+        -1000f, 0f, 1000f, 1f, 1f, 1f, 0f, 0f,
+        1000f, 0f, 1000f, 1f, 1f, 1f, 0f, 0f,
+        1000f, 0f, -1000f, 1f, 1f, 1f, 0f, 0f,
+        -1000f, 0f, -1000f, 1f, 1f, 1f, 0f, 0f,
     };
     
     private final int[] idx = {
         3,0,2,1
     };
-    
-    private final float[] textureData = {
-        0f, 0f, 1f, 1f,   1f, 0f, 0f, 1f,
-        1f, 1f, 1f, 1f,   0f, 1f, 0f, 1f
-    };
-    
+
     private final String vertShaderSource = 
         "#version 150 core\n" +
         "in vec3 position;\n" +
@@ -134,20 +131,22 @@ public class GLSimpleStuff implements GLEventListener {
         
         GL3 gl = glad.getGL().getGL3();
         
-        int[] a = new int[1];
-        gl.glGenVertexArrays(1, a, 0);
-        this.vao = a[0];
-        gl.glBindVertexArray(this.vao);
+        int[] a = new int[3];
         
-        gl.glGenBuffers(1, a, 0);
-        this.vbo = a[0];
-        gl.glBindBuffer(GL3.GL_ARRAY_BUFFER, this.vbo);
+        gl.glGenBuffers(3, a, 0);
+        this.vboFloor = a[0];
+        gl.glBindBuffer(GL3.GL_ARRAY_BUFFER, this.vboFloor);
+        FloatBuffer stippleBuffer = Buffers.newDirectFloatBuffer(floor);
+        stippleBuffer.flip();
+        gl.glBufferData(GL3.GL_ARRAY_BUFFER, floor.length * Buffers.SIZEOF_FLOAT, stippleBuffer, GL3.GL_STATIC_DRAW);
+        
+        this.vboBox = a[1];
+        gl.glBindBuffer(GL3.GL_ARRAY_BUFFER, this.vboBox);
         FloatBuffer boxBuffer = Buffers.newDirectFloatBuffer(box);
         boxBuffer.flip();
         gl.glBufferData(GL3.GL_ARRAY_BUFFER, box.length * Buffers.SIZEOF_FLOAT, boxBuffer, GL3.GL_STATIC_DRAW);
         
-        gl.glGenBuffers(1, a, 0);
-        this.ebo = a[0];
+        this.ebo = a[2];
         gl.glBindBuffer(GL3.GL_ELEMENT_ARRAY_BUFFER, this.ebo);
         IntBuffer idxBuffer = Buffers.newDirectIntBuffer(idx);
         idxBuffer.flip();
@@ -174,6 +173,11 @@ public class GLSimpleStuff implements GLEventListener {
         this.checkValidation(gl);
         
         this.stipScaleLocation = gl.glGetUniformLocation(this.program, "stipScale");
+        this.mvpLocation = gl.glGetUniformLocation(this.program, "mvp");
+        
+        gl.glGenVertexArrays(1, a, 0);
+        this.vao = a[0];
+        gl.glBindVertexArray(this.vao);
         
         int posAttrib = gl.glGetAttribLocation(this.program, "position");
         gl.glEnableVertexAttribArray(posAttrib);
@@ -217,7 +221,6 @@ public class GLSimpleStuff implements GLEventListener {
 //        gl.glTexParameteri(GL3.GL_TEXTURE_2D, GL3.GL_TEXTURE_WRAP_S, GL3.GL_REPEAT);
 //        gl.glTexParameteri(GL3.GL_TEXTURE_2D, GL3.GL_TEXTURE_WRAP_T, GL3.GL_REPEAT);
         
-        
     }
 
     @Override
@@ -229,46 +232,71 @@ public class GLSimpleStuff implements GLEventListener {
     @Override
     public void display(GLAutoDrawable glad) {
         
+        // Matrix Setup
+        Vec4 eyePoint = new Vec4(Math.sin(cameraRotationRadians)*40.0, 0.0, Math.cos(cameraRotationRadians)*40.0);
+        Matrix modelBox = Matrix.fromRotationX(Angle.fromRadians(this.modelRotationRadians));
+        Matrix modelStipple = Matrix.IDENTITY;
+        //Matrix model = Matrix.IDENTITY;
+        Matrix modelView = Matrix.fromViewLookAt(eyePoint, Vec4.ZERO, Vec4.UNIT_Y);
+        Matrix projection = Matrix.fromPerspective(Angle.fromDegrees(45.0), WIDTH, HEIGHT, 1.0, 50.0);
+        Matrix mvpBox = projection.multiply(modelView.multiply(modelBox));
+        Matrix mvpStipple = projection.multiply(modelView.multiply(modelStipple));
+        float[] mvpFloat = new float[16];
+        double[] mvpDouble = new double[16];
+        mvpBox.toArray(mvpDouble, 0, true);
+        for(int i = 0; i<16; i++){
+            mvpFloat[i] = (float) mvpDouble[i];
+        }
+        
+        // Standard GL Setup
         GL3 gl = glad.getGL().getGL3();
-        gl.glBindVertexArray(this.vao);
         gl.glClear(GL3.GL_COLOR_BUFFER_BIT | GL3.GL_DEPTH_BUFFER_BIT);
         gl.glEnable(GL3.GL_DEPTH_TEST);
         gl.glEnable(GL3.GL_PRIMITIVE_RESTART);
-        gl.glEnable(GL3.GL_BLEND);
-        gl.glBlendEquation(GL3.GL_FUNC_ADD);
-        gl.glBlendFunc(GL3.GL_SRC_ALPHA, GL3.GL_ONE_MINUS_SRC_ALPHA);
+//        gl.glEnable(GL3.GL_BLEND);
+//        gl.glBlendEquation(GL3.GL_FUNC_ADD);
+//        gl.glBlendFunc(GL3.GL_SRC_ALPHA, GL3.GL_ONE_MINUS_SRC_ALPHA);
         gl.glPrimitiveRestartIndex(GLManager.RESTART_INDEX);
         
+        // First Draw
+        gl.glBindVertexArray(this.vao);
         gl.glUseProgram(this.program);
-        gl.glBindBuffer(GL3.GL_ARRAY_BUFFER, this.vbo);
+        gl.glBindBuffer(GL3.GL_ELEMENT_ARRAY_BUFFER, this.ebo);
+        gl.glBindBuffer(GL3.GL_ARRAY_BUFFER, this.vboBox);
         gl.glActiveTexture(GL3.GL_TEXTURE0);
         this.textureImage.enable(gl);
         this.textureImage.bind(gl);
         gl.glUniform1i(this.textureUniformLocation, 0);
         gl.glUniform1f(this.stipScaleLocation, (float) (Math.sin(modelRotationRadians) + 2.0));
-        
-        Vec4 eyePoint = new Vec4(Math.sin(cameraRotationRadians)*40.0, 0.0, Math.cos(cameraRotationRadians)*40.0);
-        
-        // Matrix model = Matrix.fromRotationX(Angle.fromRadians(this.modelRotationRadians));
-        Matrix model = Matrix.IDENTITY;
-        Matrix modelView = Matrix.fromViewLookAt(eyePoint, Vec4.ZERO, Vec4.UNIT_Y);
-        Matrix projection = Matrix.fromPerspective(Angle.fromDegrees(45.0), WIDTH, HEIGHT, 1.0, 50.0);
-        Matrix mvp = projection.multiply(modelView.multiply(model));
-        float[] mvpFloat = new float[16];
-        double[] mvpDouble = new double[16];
-        mvp.toArray(mvpDouble, 0, true);
-        for(int i = 0; i<16; i++){
-            mvpFloat[i] = (float) mvpDouble[i];
-        }
-        int mvpPos = gl.glGetUniformLocation(this.program, "mvp");
-        gl.glUniformMatrix4fv(mvpPos, 1, true, mvpFloat, 0);
+        gl.glUniformMatrix4fv(this.mvpLocation, 1, true, mvpFloat, 0);
         
         gl.glDrawElements(GL3.GL_LINE_STRIP, 4, GL3.GL_UNSIGNED_INT, 0);
         
         this.textureImage.disable(gl);
         
+        // Second Draw
+        gl.glBindVertexArray(this.vao);
+        gl.glUseProgram(this.program);
+        gl.glBindBuffer(GL3.GL_ELEMENT_ARRAY_BUFFER, this.ebo);
+        gl.glBindBuffer(GL3.GL_ARRAY_BUFFER, this.vboFloor);
+        gl.glActiveTexture(GL3.GL_TEXTURE0);
+        this.textureImage.enable(gl);
+        this.textureImage.bind(gl);
+        gl.glUniform1i(this.textureUniformLocation, 0);
+        gl.glUniform1f(this.stipScaleLocation, 1f);
+        mvpStipple.toArray(mvpDouble, 0, true);
+        for(int i = 0; i<16; i++){
+            mvpFloat[i] = (float) mvpDouble[i];
+        }
+        gl.glUniformMatrix4fv(this.mvpLocation, 1, true, mvpFloat, 0);
+        
+        gl.glDrawElements(GL3.GL_TRIANGLE_STRIP, 4, GL3.GL_UNSIGNED_INT, 0);
+        
+        this.textureImage.disable(gl);
+
+        // Modify world
         this.cameraRotationRadians += 0.01;
-        this.modelRotationRadians +=0.05;
+        this.modelRotationRadians +=0.003;
     }
 
     @Override
