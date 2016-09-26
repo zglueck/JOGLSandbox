@@ -224,12 +224,12 @@ public class GLSimpleStuff implements GLEventListener {
     public void display(GLAutoDrawable glad) {
         
         // Matrix Setup
-        Vec4 eyePoint = new Vec4(Math.sin(cameraRotationRadians)*40.0, 5.0, Math.cos(cameraRotationRadians)*40.0);
+        Vec4 eyePoint = new Vec4(Math.sin(cameraRotationRadians)*(60.0), 5.0, Math.cos(cameraRotationRadians)*(60.0));
         Matrix modelBox = Matrix.fromRotationX(Angle.fromRadians(this.modelRotationRadians));
         Matrix modelStipple = Matrix.IDENTITY;
         //Matrix model = Matrix.IDENTITY;
         Matrix modelView = Matrix.fromViewLookAt(eyePoint, Vec4.ZERO, Vec4.UNIT_Y);
-        Matrix projection = Matrix.fromPerspective(Angle.fromDegrees(45.0), WIDTH, HEIGHT, 1.0, 50.0);
+        Matrix projection = Matrix.fromPerspective(Angle.fromDegrees(45.0), WIDTH, HEIGHT, 1.0, 100.0);
         Matrix mvpBox = projection.multiply(modelView.multiply(modelBox));
         Matrix mvpStipple = projection.multiply(modelView.multiply(modelStipple));
         float[] mvpFloat = new float[16];
@@ -272,7 +272,7 @@ public class GLSimpleStuff implements GLEventListener {
         this.textureImage.enable(gl);
         this.textureImage.bind(gl);
         gl.glUniform1i(this.textureUniformLocation, 0);
-        gl.glUniform1f(this.stipScaleLocation, (float) (Math.sin(modelRotationRadians*5.0) + 2.0));
+        gl.glUniform1f(this.stipScaleLocation, 10f);
         gl.glUniformMatrix4fv(this.mvpLocation, 1, true, mvpFloat, 0);
         
         gl.glDrawElements(GL3.GL_LINE_STRIP, 4, GL3.GL_UNSIGNED_INT, 0);
@@ -280,34 +280,34 @@ public class GLSimpleStuff implements GLEventListener {
         this.textureImage.disable(gl);
         
         // Second Draw
-        //gl.glBindVertexArray(this.vao);
-        gl.glUseProgram(this.program);
-        gl.glBindBuffer(GL3.GL_ELEMENT_ARRAY_BUFFER, this.ebo);
-        gl.glBindBuffer(GL3.GL_ARRAY_BUFFER, this.vboFloor);
-        
-        gl.glEnableVertexAttribArray(posAttrib);
-        gl.glVertexAttribPointer(posAttrib, 3, GL3.GL_FLOAT, false, 8 * Buffers.SIZEOF_FLOAT, 0);
-        
-        gl.glEnableVertexAttribArray(texAttrib);
-        gl.glVertexAttribPointer(texAttrib, 2, GL3.GL_FLOAT, false, 8 * Buffers.SIZEOF_FLOAT, 6 * Buffers.SIZEOF_FLOAT);
-        
-        gl.glEnableVertexAttribArray(colAttrib);
-        gl.glVertexAttribPointer(colAttrib, 3, GL3.GL_FLOAT, false, 8 * Buffers.SIZEOF_FLOAT, 3 * Buffers.SIZEOF_FLOAT);
-        
-        gl.glActiveTexture(GL3.GL_TEXTURE0);
-        this.textureImage.enable(gl);
-        this.textureImage.bind(gl);
-        gl.glUniform1i(this.textureUniformLocation, 0);
-        gl.glUniform1f(this.stipScaleLocation, 1f);
+//        //gl.glBindVertexArray(this.vao);
+//        gl.glUseProgram(this.program);
+//        gl.glBindBuffer(GL3.GL_ELEMENT_ARRAY_BUFFER, this.ebo);
+//        gl.glBindBuffer(GL3.GL_ARRAY_BUFFER, this.vboFloor);
+//        
+//        gl.glEnableVertexAttribArray(posAttrib);
+//        gl.glVertexAttribPointer(posAttrib, 3, GL3.GL_FLOAT, false, 8 * Buffers.SIZEOF_FLOAT, 0);
+//        
+//        gl.glEnableVertexAttribArray(texAttrib);
+//        gl.glVertexAttribPointer(texAttrib, 2, GL3.GL_FLOAT, false, 8 * Buffers.SIZEOF_FLOAT, 6 * Buffers.SIZEOF_FLOAT);
+//        
+//        gl.glEnableVertexAttribArray(colAttrib);
+//        gl.glVertexAttribPointer(colAttrib, 3, GL3.GL_FLOAT, false, 8 * Buffers.SIZEOF_FLOAT, 3 * Buffers.SIZEOF_FLOAT);
+//        
+//        gl.glActiveTexture(GL3.GL_TEXTURE0);
+//        this.textureImage.enable(gl);
+//        this.textureImage.bind(gl);
+//        gl.glUniform1i(this.textureUniformLocation, 0);
+//        gl.glUniform1f(this.stipScaleLocation, 1f);
 //        mvpStipple.toArray(mvpDouble, 0, true);
 //        for(int i = 0; i<16; i++){
 //            mvpFloat[i] = (float) mvpDouble[i];
-//        }
-        gl.glUniformMatrix4fv(this.mvpLocation, 1, true, mvpFloat, 0);
-        
-        gl.glDrawElements(GL3.GL_LINE_STRIP, 4, GL3.GL_UNSIGNED_INT, 0);
-        
-        this.textureImage.disable(gl);
+////        }
+//        gl.glUniformMatrix4fv(this.mvpLocation, 1, true, mvpFloat, 0);
+//        
+//        gl.glDrawElements(GL3.GL_LINE_STRIP, 4, GL3.GL_UNSIGNED_INT, 0);
+//        
+//        this.textureImage.disable(gl);
 
         // Modify world
         this.cameraRotationRadians += 0.01;
