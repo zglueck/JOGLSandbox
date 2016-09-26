@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.nio.charset.StandardCharsets;
+import javax.media.opengl.GL2;
 import javax.media.opengl.GL3;
 import javax.media.opengl.GLAutoDrawable;
 import javax.media.opengl.GLCapabilities;
@@ -68,7 +69,7 @@ public class GLSimpleStuff implements GLEventListener {
         
     }
 
-    private int vao;
+    //private int vao;
     private int vboBox;
     private int vboFloor;
     private int ebo;
@@ -86,10 +87,10 @@ public class GLSimpleStuff implements GLEventListener {
     };
     
     private final float[] floor = {
-        -1000f, 0f, 1000f, 1f, 1f, 1f, 0f, 0f,
-        1000f, 0f, 1000f, 1f, 1f, 1f, 0f, 0f,
-        1000f, 0f, -1000f, 1f, 1f, 1f, 0f, 0f,
-        -1000f, 0f, -1000f, 1f, 1f, 1f, 0f, 0f,
+        -10.5f, -10.5f, 0f, 1f, 1f, 1f, 0f, 0f,
+        10.5f, -10.5f, 0f, 1f, 1f, 1f, 0f, 0f,
+        10.5f, 10.5f, 0f, 1f, 1f, 1f, 0f, 0f,
+        -10.5f, 10.5f, 0f, 1f, 1f, 1f, 0f, 0f,
     };
     
     private final int[] idx = {
@@ -175,21 +176,11 @@ public class GLSimpleStuff implements GLEventListener {
         this.stipScaleLocation = gl.glGetUniformLocation(this.program, "stipScale");
         this.mvpLocation = gl.glGetUniformLocation(this.program, "mvp");
         
-        gl.glGenVertexArrays(1, a, 0);
-        this.vao = a[0];
-        gl.glBindVertexArray(this.vao);
+//        gl.glGenVertexArrays(1, a, 0);
+//        this.vao = a[0];
+//        gl.glBindVertexArray(this.vao);
         
-        int posAttrib = gl.glGetAttribLocation(this.program, "position");
-        gl.glEnableVertexAttribArray(posAttrib);
-        gl.glVertexAttribPointer(posAttrib, 3, GL3.GL_FLOAT, false, 8 * Buffers.SIZEOF_FLOAT, 0);
         
-        int texAttrib = gl.glGetAttribLocation(this.program, "texcoord");
-        gl.glEnableVertexAttribArray(texAttrib);
-        gl.glVertexAttribPointer(texAttrib, 2, GL3.GL_FLOAT, false, 8 * Buffers.SIZEOF_FLOAT, 6 * Buffers.SIZEOF_FLOAT);
-        
-        int colAttrib = gl.glGetAttribLocation(this.program, "color");
-        gl.glEnableVertexAttribArray(colAttrib);
-        gl.glVertexAttribPointer(colAttrib, 3, GL3.GL_FLOAT, false, 8 * Buffers.SIZEOF_FLOAT, 3 * Buffers.SIZEOF_FLOAT);
         
         try {
             this.textureImage = TextureIO.newTexture(this.getClass().getResourceAsStream("/4x4_White_Checkerboard.png"), false, ".png");
@@ -233,7 +224,7 @@ public class GLSimpleStuff implements GLEventListener {
     public void display(GLAutoDrawable glad) {
         
         // Matrix Setup
-        Vec4 eyePoint = new Vec4(Math.sin(cameraRotationRadians)*40.0, 0.0, Math.cos(cameraRotationRadians)*40.0);
+        Vec4 eyePoint = new Vec4(Math.sin(cameraRotationRadians)*40.0, 5.0, Math.cos(cameraRotationRadians)*40.0);
         Matrix modelBox = Matrix.fromRotationX(Angle.fromRadians(this.modelRotationRadians));
         Matrix modelStipple = Matrix.IDENTITY;
         //Matrix model = Matrix.IDENTITY;
@@ -259,15 +250,29 @@ public class GLSimpleStuff implements GLEventListener {
         gl.glPrimitiveRestartIndex(GLManager.RESTART_INDEX);
         
         // First Draw
-        gl.glBindVertexArray(this.vao);
+        //gl.glBindVertexArray(this.vao);
         gl.glUseProgram(this.program);
         gl.glBindBuffer(GL3.GL_ELEMENT_ARRAY_BUFFER, this.ebo);
         gl.glBindBuffer(GL3.GL_ARRAY_BUFFER, this.vboBox);
+        
+        int posAttrib = gl.glGetAttribLocation(this.program, "position");
+        gl.glEnableVertexAttribArray(posAttrib);
+        gl.glVertexAttribPointer(posAttrib, 3, GL3.GL_FLOAT, false, 8 * Buffers.SIZEOF_FLOAT, 0);
+        
+        int texAttrib = gl.glGetAttribLocation(this.program, "texcoord");
+        gl.glEnableVertexAttribArray(texAttrib);
+        gl.glVertexAttribPointer(texAttrib, 2, GL3.GL_FLOAT, false, 8 * Buffers.SIZEOF_FLOAT, 6 * Buffers.SIZEOF_FLOAT);
+        
+        int colAttrib = gl.glGetAttribLocation(this.program, "color");
+        gl.glEnableVertexAttribArray(colAttrib);
+        gl.glVertexAttribPointer(colAttrib, 3, GL3.GL_FLOAT, false, 8 * Buffers.SIZEOF_FLOAT, 3 * Buffers.SIZEOF_FLOAT);
+        
+        
         gl.glActiveTexture(GL3.GL_TEXTURE0);
         this.textureImage.enable(gl);
         this.textureImage.bind(gl);
         gl.glUniform1i(this.textureUniformLocation, 0);
-        gl.glUniform1f(this.stipScaleLocation, (float) (Math.sin(modelRotationRadians) + 2.0));
+        gl.glUniform1f(this.stipScaleLocation, (float) (Math.sin(modelRotationRadians*5.0) + 2.0));
         gl.glUniformMatrix4fv(this.mvpLocation, 1, true, mvpFloat, 0);
         
         gl.glDrawElements(GL3.GL_LINE_STRIP, 4, GL3.GL_UNSIGNED_INT, 0);
@@ -275,22 +280,32 @@ public class GLSimpleStuff implements GLEventListener {
         this.textureImage.disable(gl);
         
         // Second Draw
-        gl.glBindVertexArray(this.vao);
+        //gl.glBindVertexArray(this.vao);
         gl.glUseProgram(this.program);
         gl.glBindBuffer(GL3.GL_ELEMENT_ARRAY_BUFFER, this.ebo);
         gl.glBindBuffer(GL3.GL_ARRAY_BUFFER, this.vboFloor);
+        
+        gl.glEnableVertexAttribArray(posAttrib);
+        gl.glVertexAttribPointer(posAttrib, 3, GL3.GL_FLOAT, false, 8 * Buffers.SIZEOF_FLOAT, 0);
+        
+        gl.glEnableVertexAttribArray(texAttrib);
+        gl.glVertexAttribPointer(texAttrib, 2, GL3.GL_FLOAT, false, 8 * Buffers.SIZEOF_FLOAT, 6 * Buffers.SIZEOF_FLOAT);
+        
+        gl.glEnableVertexAttribArray(colAttrib);
+        gl.glVertexAttribPointer(colAttrib, 3, GL3.GL_FLOAT, false, 8 * Buffers.SIZEOF_FLOAT, 3 * Buffers.SIZEOF_FLOAT);
+        
         gl.glActiveTexture(GL3.GL_TEXTURE0);
         this.textureImage.enable(gl);
         this.textureImage.bind(gl);
         gl.glUniform1i(this.textureUniformLocation, 0);
         gl.glUniform1f(this.stipScaleLocation, 1f);
-        mvpStipple.toArray(mvpDouble, 0, true);
-        for(int i = 0; i<16; i++){
-            mvpFloat[i] = (float) mvpDouble[i];
-        }
+//        mvpStipple.toArray(mvpDouble, 0, true);
+//        for(int i = 0; i<16; i++){
+//            mvpFloat[i] = (float) mvpDouble[i];
+//        }
         gl.glUniformMatrix4fv(this.mvpLocation, 1, true, mvpFloat, 0);
         
-        gl.glDrawElements(GL3.GL_TRIANGLE_STRIP, 4, GL3.GL_UNSIGNED_INT, 0);
+        gl.glDrawElements(GL3.GL_LINE_STRIP, 4, GL3.GL_UNSIGNED_INT, 0);
         
         this.textureImage.disable(gl);
 
