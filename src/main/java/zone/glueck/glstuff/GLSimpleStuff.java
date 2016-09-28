@@ -89,7 +89,9 @@ public class GLSimpleStuff implements GLEventListener, KeyListener {
                 this.yaw = this.yaw + this.step;
                 break;
             case KeyEvent.VK_A:
-                this.zoom = this.zoom - this.step;
+                if (this.zoom>=10.0) {
+                    this.zoom = this.zoom - this.step;
+                }
                 break;
             case KeyEvent.VK_Z:
                 this.zoom = this.zoom + this.step;
@@ -101,7 +103,7 @@ public class GLSimpleStuff implements GLEventListener, KeyListener {
     protected double pitched = 0.0;
     protected double yaw = 0.0;
     protected double zoom = 60.0;
-
+    
     @Override
     public void keyReleased(KeyEvent e) {
         // nothing
@@ -111,41 +113,89 @@ public class GLSimpleStuff implements GLEventListener, KeyListener {
     private int vboBox;
     private int vboFloor;
     private int vboCpu;
+    private int vboDiff;
     private int ebo;
     private int program;
     private int cpuProgram;
+    private int gpuProgram;
     private int eyeScalingFactorLocation;
     private int textureUniformLocation;
     private int mvpLocation;
     private int cpuMvpLocation;
+    private int gpuMvpLocation;
+    private int gpuMvLocation;
     private int cpuLinTextCoordLocation;
+    private int gpuDiffVectorLocation;
     private Texture textureImage;
     private double eyeDistance = 60.0;
     
-    private final float[] box = {
+    // diff based attributes
+    private int dbPosition;
+    private int dbColor;
+    private int dbDiffVector;
+    
+    private final float[] distanceBased = {
         -10f,  10f,  0f, 1f, 1f, 1f, 0f, 0f,
-        -10f, -10f, 0f, 1f, 1f, 1f, 20f, 0f,
-        10f,  10f,  0f, 1f, 1f, 1f,(float) (Math.sqrt(2)*20.0+20.0), 0f,
-        10f, -10f, 0f, 1f, 1f, 1f, (float) (Math.sqrt(2)*20.0+40.0), 0f
+        -10f, -10f, 0f, 1f, 1f, 1f, 10f, 0f,
+        10f,  10f,  0f, 1f, 1f, 1f,(float) (Math.sqrt(2)*10.0+10.0), 0f,
+        10f, -10f, 0f, 1f, 1f, 1f, (float) (Math.sqrt(2)*10.0+20.0), 0f
     };
     
-    private final float[] floor = {
+    private final float[] staticBased = {
         -10.5f,  10f,  -1f, 1f, 0f, 0f, 0f, 0f,
-        -10.5f, -10f, -1f, 1f, 0f, 0f, 20f, 0f,
-        9.5f,  10f,  -1f, 1f, 0f, 0f, (float) (Math.sqrt(2)*20.0+20.0), 0f,
-        9.5f, -10f, -1f, 1f, 0f, 0f, (float) (Math.sqrt(2)*20.0+40.0), 0f
+        -10.5f, -10f, -1f, 1f, 0f, 0f, 10f, 0f,
+        9.5f,  10f,  -1f, 1f, 0f, 0f, (float) (Math.sqrt(2)*10.0+10.0), 0f,
+        9.5f, -10f, -1f, 1f, 0f, 0f, (float) (Math.sqrt(2)*10.0+20.0), 0f
     };
     
-    private final Vec4[] cpuPos = new Vec4[]{
+    private final Vec4[] distancePerspectiveBased = new Vec4[]{
         new Vec4(-9.5, 10.0, 1.0),
         new Vec4(-9.5, -10.0, 1.0),
         new Vec4(10.5, 10.0, 1.0),
         new Vec4(10.5, -10.0, 1.0)
     };
     
+    private final float[] diffBased = {
+        -11f, 10f, -2f, 0f, 1f, 1f, 0f, 0f, 0f,
+        -11f, -10f, -2f, 0f, 1f, 1f, 0f, -20f, 0f,
+        9f, 10f, -2f, 0f, 1f, 1f, 20f, 20f, 0f,
+        9f, -10f, -2f, 0f, 1f, 1f, 0f, -20f, 0f
+    };
+    
 //    private final int[] idx = {
 //        0, 1, 2, 3
 //    };
+    
+    private static final String gpuVertShaderSource = 
+        "#version 150 core\n" +
+        "in vec3 position;\n" +
+        "in vec3 color;\n" +
+        "in vec3 diffVector;\n" +
+        "uniform mat4 mvp;\n" +
+        "uniform mat4 mv;\n" +
+        "out vec3 Color;\n" +
+        "out vec2 Texcoord;\n" +
+        "float calcTexCoord(vec3 source, mat4 mv) {\n" +
+        "   vec4 vector = mv * vec4(source, 1.0);\n" +
+        "   return sqrt(vector.x * vector.x + vector.y * vector.y)/2.0;\n" +
+        "}\n" +
+        "void main()\n" +
+        "{\n" +
+        "    Color = color;\n" +
+        "    Texcoord = vec2(calcTexCoord(diffVector, mv), 0.0);\n" +
+        "    gl_Position = mvp * vec4(position, 1.0);\n" +
+        "}";
+
+    private static final String gpuFragShaderSource = 
+        "#version 150 core\n" +
+        "in vec3 Color;\n" +
+        "in vec2 Texcoord;\n" +
+        "out vec4 outColor;\n" +
+        "uniform sampler2D tex;\n" +
+        "void main()\n" +
+        "{\n" +
+        "    outColor = vec4(Color, 1.0) * texture(tex, Texcoord);\n" +
+        "}";
     
     private static final String cpuVertShaderSource = 
         "#version 150 core\n" +
@@ -185,7 +235,7 @@ public class GLSimpleStuff implements GLEventListener, KeyListener {
         "void main()\n" +
         "{\n" +
         "    Color = color;\n" +
-        "    Texcoord = vec2(texcoord.x/eyeScalingFactor, 0.0);\n" +
+        "    Texcoord = vec2(texcoord.x * eyeScalingFactor, 0.0);\n" +
         "    gl_Position = mvp * vec4(position, 1.0);\n" +
         "}";
     
@@ -205,20 +255,20 @@ public class GLSimpleStuff implements GLEventListener, KeyListener {
         
         GL3 gl = glad.getGL().getGL3();
         
-        int[] a = new int[3];
+        int[] a = new int[4];
         
         gl.glGenBuffers(a.length, a, 0);
         this.vboFloor = a[0];
         gl.glBindBuffer(GL3.GL_ARRAY_BUFFER, this.vboFloor);
-        FloatBuffer stippleBuffer = Buffers.newDirectFloatBuffer(floor);
+        FloatBuffer stippleBuffer = Buffers.newDirectFloatBuffer(staticBased);
         stippleBuffer.flip();
-        gl.glBufferData(GL3.GL_ARRAY_BUFFER, floor.length * Buffers.SIZEOF_FLOAT, stippleBuffer, GL3.GL_STATIC_DRAW);
+        gl.glBufferData(GL3.GL_ARRAY_BUFFER, staticBased.length * Buffers.SIZEOF_FLOAT, stippleBuffer, GL3.GL_STATIC_DRAW);
         
         this.vboBox = a[1];
         gl.glBindBuffer(GL3.GL_ARRAY_BUFFER, this.vboBox);
-        FloatBuffer boxBuffer = Buffers.newDirectFloatBuffer(box);
+        FloatBuffer boxBuffer = Buffers.newDirectFloatBuffer(distanceBased);
         boxBuffer.flip();
-        gl.glBufferData(GL3.GL_ARRAY_BUFFER, box.length * Buffers.SIZEOF_FLOAT, boxBuffer, GL3.GL_STATIC_DRAW);
+        gl.glBufferData(GL3.GL_ARRAY_BUFFER, distanceBased.length * Buffers.SIZEOF_FLOAT, boxBuffer, GL3.GL_STATIC_DRAW);
         
 //        this.ebo = a[2];
 //        gl.glBindBuffer(GL3.GL_ELEMENT_ARRAY_BUFFER, this.ebo);
@@ -229,6 +279,14 @@ public class GLSimpleStuff implements GLEventListener, KeyListener {
         this.vboCpu = a[2];
         gl.glBindBuffer(GL3.GL_ARRAY_BUFFER, this.vboCpu);
         gl.glBufferData(GL3.GL_ARRAY_BUFFER, 28 * Buffers.SIZEOF_FLOAT, null, GL3.GL_STREAM_DRAW);
+        
+        this.vboDiff = a[3];
+        gl.glBindBuffer(GL3.GL_ARRAY_BUFFER, this.vboDiff);
+        FloatBuffer diffBuffer = Buffers.newDirectFloatBuffer(this.diffBased);
+        diffBuffer.flip();
+        gl.glBufferData(GL3.GL_ARRAY_BUFFER, this.diffBased.length * Buffers.SIZEOF_FLOAT, diffBuffer, GL3.GL_STATIC_DRAW);
+        
+        gl.glBindBuffer(GL3.GL_ARRAY_BUFFER, 0);
         
         int v = gl.glCreateShader(GL3.GL_VERTEX_SHADER);
         gl.glShaderSource(v, 1, Shader.VERT.getShader(), null, 0);
@@ -273,6 +331,32 @@ public class GLSimpleStuff implements GLEventListener, KeyListener {
         gl.glValidateProgram(this.cpuProgram);
         this.checkValidation(gl);
   
+        v = gl.glCreateShader(GL3.GL_VERTEX_SHADER);
+        gl.glShaderSource(v, 1, Shader.G_VERT.getShader(), null, 0);
+        gl.glCompileShader(v);
+        this.checkCompileShaderStatus(gl, v);
+        
+        f = gl.glCreateShader(GL3.GL_FRAGMENT_SHADER);
+        gl.glShaderSource(f, 1, Shader.G_FRAG.getShader(), null, 0);
+        gl.glCompileShader(f);
+        this.checkCompileShaderStatus(gl, f);
+        
+        this.gpuProgram = gl.glCreateProgram();
+        gl.glAttachShader(this.gpuProgram, v);
+        gl.glAttachShader(this.gpuProgram, f);
+        gl.glBindFragDataLocation(this.gpuProgram, 0, "outColor");
+        gl.glLinkProgram(this.gpuProgram);
+        this.checkLinkStatus(gl);
+        gl.glUseProgram(this.gpuProgram);
+        gl.glValidateProgram(this.gpuProgram);
+        this.checkValidation(gl);
+        
+        this.gpuMvpLocation = gl.glGetUniformLocation(this.gpuProgram, "mvp");
+        this.dbPosition = gl.glGetAttribLocation(this.gpuProgram, "position");
+        this.dbColor = gl.glGetAttribLocation(this.gpuProgram, "color");
+        this.dbDiffVector = gl.glGetAttribLocation(this.gpuProgram, "diffVector");
+        this.gpuMvLocation = gl.glGetUniformLocation(this.gpuProgram, "mv");
+        
         try {
             this.textureImage = TextureIO.newTexture(this.getClass().getResourceAsStream("/4x4_White_Checkerboard.png"), false, ".png");
             if (this.textureImage == null) {
@@ -366,7 +450,7 @@ public class GLSimpleStuff implements GLEventListener, KeyListener {
         if (this.iniDist==-Double.MAX_VALUE){
             this.iniDist = eyePoint.getLength3()/60.0;
         }
-        gl.glUniform1f(this.eyeScalingFactorLocation, (float) (eyePoint.getLength3()/60.0));
+        gl.glUniform1f(this.eyeScalingFactorLocation, (float) (60.0 / eyePoint.getLength3()));
         gl.glUniformMatrix4fv(this.mvpLocation, 1, true, mvpFloat, 0);
         
         gl.glDrawArrays(GL3.GL_LINE_STRIP, 0, 4);
@@ -410,23 +494,24 @@ public class GLSimpleStuff implements GLEventListener, KeyListener {
         gl.glUseProgram(this.cpuProgram);
         //gl.glBindBuffer(GL3.GL_ELEMENT_ARRAY_BUFFER, this.ebo);
         // rebuffer the data
-        
         float[] data = new float[28];
         for (int i = 0; i<4; i++) {
-            data[(i * 7)] = (float) this.cpuPos[i].x;
-            data[(i * 7) + 1] = (float) this.cpuPos[i].y;
-            data[(i * 7) + 2] = (float) this.cpuPos[i].z;
+            data[(i * 7)] = (float) this.distancePerspectiveBased[i].x;
+            data[(i * 7) + 1] = (float) this.distancePerspectiveBased[i].y;
+            data[(i * 7) + 2] = (float) this.distancePerspectiveBased[i].z;
             data[(i * 7) + 3] = 0f;
-            data[(i * 7) + 4] = 1f;
+            data[(i * 7) + 4] = 1f; // colored green
             data[(i * 7) + 5] = 0f;
             if (i == 0) {
                 data[(i * 7) + 6] = 0f;    
             } else {
-                Vec4 diffVector = this.cpuPos[i].subtract3(this.cpuPos[i - 1]);
-                diffVector = diffVector.transformBy4(mvpBox);
-                double scaleValue = Math.sqrt(diffVector.x * diffVector.x + diffVector.y * diffVector.y);
+                Vec4 diffVector = this.distancePerspectiveBased[i].subtract3(this.distancePerspectiveBased[i - 1]);
+                diffVector = diffVector.transformBy4(modelBox);
+                // dirty surrogate for project method, in this case calculated on the cpu
+                double scaleValue = Math.sqrt(diffVector.x * diffVector.x + diffVector.y * diffVector.y)/2.0; //for the initial conditions, this keeps the number of texture units at 10, just like the other cases
+                // now adujust for eye distance - the project method would handle this automatically
                 scaleValue = scaleValue * (60.0 / eyePoint.getLength3());
-                data[(i * 7) + 6] = (float) (scaleValue * 0.25 + data[((i - 1) * 7) + 6]);
+                data[(i * 7) + 6] = (float) (scaleValue + data[((i - 1) * 7) + 6]); //accumulate
             }
         }
         FloatBuffer cpuBuffer = Buffers.newDirectFloatBuffer(data);
@@ -455,6 +540,34 @@ public class GLSimpleStuff implements GLEventListener, KeyListener {
         
         gl.glDrawArrays(GL3.GL_LINE_STRIP, 0, 4);
         // gl.glDrawElements(GL3.GL_LINE_STRIP, 4, GL3.GL_UNSIGNED_INT, 0);
+        
+        // Diff Based GPU Draw
+        gl.glUseProgram(this.gpuProgram);
+        gl.glBindBuffer(GL3.GL_ARRAY_BUFFER, this.vboDiff);
+        
+        gl.glEnableVertexAttribArray(this.dbPosition);
+        gl.glVertexAttribPointer(this.dbPosition, 3, GL3.GL_FLOAT, false, 9 * Buffers.SIZEOF_FLOAT, 0);
+        
+        gl.glEnableVertexAttribArray(this.dbColor);
+        gl.glVertexAttribPointer(this.dbColor, 3, GL3.GL_FLOAT, false, 9 * Buffers.SIZEOF_FLOAT, 3 * Buffers.SIZEOF_FLOAT);
+        
+        gl.glEnableVertexAttribArray(this.dbDiffVector);
+        gl.glVertexAttribPointer(this.dbDiffVector, 3, GL3.GL_FLOAT, false, 9 * Buffers.SIZEOF_FLOAT, 6 * Buffers.SIZEOF_FLOAT);
+        
+        gl.glActiveTexture(GL3.GL_TEXTURE0);
+        this.textureImage.enable(gl);
+        this.textureImage.bind(gl);
+        gl.glUniformMatrix4fv(this.gpuMvpLocation, 1, true, mvpFloat, 0);
+        Matrix mv = modelView.multiply(modelBox);
+        double[] mvDouble = new double[16];
+        float[] mvFloat = new float[16];
+        mv.toArray(mvDouble, 0, true);
+        for(int i = 0; i<16; i++){
+            mvFloat[i] = (float) mvDouble[i];
+        }
+        gl.glUniformMatrix4fv(this.gpuMvLocation, 1, true, mvFloat, 0);
+        
+        gl.glDrawArrays(GL3.GL_LINE_STRIP, 0, 4);
         
         this.textureImage.disable(gl);
     }
@@ -547,7 +660,7 @@ public class GLSimpleStuff implements GLEventListener, KeyListener {
 
 
     enum Shader {
-        VERT, FRAG, C_VERT, C_FRAG;
+        VERT, FRAG, C_VERT, C_FRAG, G_VERT, G_FRAG;
         
         public String[] getShader(){
             switch(this){
@@ -559,6 +672,10 @@ public class GLSimpleStuff implements GLEventListener, KeyListener {
                     return new String[]{cpuVertShaderSource};
                 case C_FRAG:
                     return new String[]{cpuFragShaderSource};
+                case G_VERT:
+                    return new String[]{gpuVertShaderSource};
+                case G_FRAG:
+                    return new String[]{gpuFragShaderSource};
             }
             return null;
         }
