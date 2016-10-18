@@ -218,7 +218,7 @@ public class GLSimpleStuff implements GLEventListener, KeyListener {
     
     @Override
     public void keyReleased(KeyEvent e) {
-        // nothing
+        // nothing yet
     }
     
     @Override
