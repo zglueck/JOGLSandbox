@@ -22,7 +22,6 @@ import java.nio.FloatBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import javax.media.opengl.GL2;
 import javax.media.opengl.GL3;
 import javax.media.opengl.GLAutoDrawable;
 import javax.media.opengl.GLCapabilities;
@@ -184,7 +183,7 @@ public class GLSimpleStuff implements GLEventListener, KeyListener {
             "out vec3 bColor;\n" +
             "void main() {\n" +
             "   gl_Position = vec4(bPosition, 0.0, 1.0);\n" +
-            "   bColor = vec3(1.0, 1.0, 1.0);\n" +
+            "   bColor = vec3(0.0, 0.0, 1.0);\n" +
             "}\n";
     
     private static final String SS_FRAG =
@@ -210,6 +209,7 @@ public class GLSimpleStuff implements GLEventListener, KeyListener {
     private int posJetAttrLoc;
     private int texJetAttrLoc;
     private int mvpJetUniLoc;
+    private int framebufferJet;
     
     // Screen Space Crosshairs or Border
     private int vboScreenSpace;
@@ -220,90 +220,6 @@ public class GLSimpleStuff implements GLEventListener, KeyListener {
     public void keyReleased(KeyEvent e) {
         // nothing
     }
-    
-//    private static final String gpuVertShaderSource = 
-//        "#version 150 core\n" +
-//        "in vec3 position;\n" +
-//        "in vec3 color;\n" +
-//        "in vec3 diffVector;\n" +
-//        "uniform mat4 mvp;\n" +
-//        "uniform mat4 mv;\n" +
-//        "out vec3 Color;\n" +
-//        "out vec2 Texcoord;\n" +
-//        "float calcTexCoord(vec3 source, mat4 mv) {\n" +
-//        "   vec4 vector = mv * vec4(source, 1.0);\n" +
-//        "   return sqrt(vector.x * vector.x + vector.y * vector.y)/2.0;\n" +
-//        "}\n" +
-//        "void main()\n" +
-//        "{\n" +
-//        "    Color = color;\n" +
-//        "    Texcoord = vec2(calcTexCoord(diffVector, mv), 0.0);\n" +
-//        "    gl_Position = mvp * vec4(position, 1.0);\n" +
-//        "}";
-//
-//    private static final String gpuFragShaderSource = 
-//        "#version 150 core\n" +
-//        "in vec3 Color;\n" +
-//        "in vec2 Texcoord;\n" +
-//        "out vec4 outColor;\n" +
-//        "uniform sampler2D tex;\n" +
-//        "void main()\n" +
-//        "{\n" +
-//        "    outColor = vec4(Color, 1.0) * texture(tex, Texcoord);\n" +
-//        "}";
-//    
-//    private static final String cpuVertShaderSource = 
-//        "#version 150 core\n" +
-//        "in vec3 position;\n" +
-//        "in vec3 color;\n" +
-//        "in float lintextcoord;\n" +
-//        "uniform mat4 mvp;\n" +
-//        "out vec3 Color;\n" +
-//        "out vec2 Texcoord;\n" +
-//        "void main()\n" +
-//        "{\n" +
-//        "    Color = color;\n" +
-//        "    Texcoord = vec2(lintextcoord, 0.0);\n" +
-//        "    gl_Position = mvp * vec4(position, 1.0);\n" +
-//        "}";
-//
-//    private static final String cpuFragShaderSource = 
-//        "#version 150 core\n" +
-//        "in vec3 Color;\n" +
-//        "in vec2 Texcoord;\n" +
-//        "out vec4 outColor;\n" +
-//        "uniform sampler2D tex;\n" +
-//        "void main()\n" +
-//        "{\n" +
-//        "    outColor = vec4(Color, 1.0) * texture(tex, Texcoord);\n" +
-//        "}";
-//    
-//    private static final String vertShaderSource = 
-//        "#version 150 core\n" +
-//        "in vec3 position;\n" +
-//        "in vec3 color;\n" +
-//        "in vec2 texcoord;\n" +
-//        "uniform mat4 mvp;\n" +
-//        "uniform float eyeScalingFactor;\n" +
-//        "out vec3 Color;\n" +
-//        "out vec2 Texcoord;\n" +
-//        "void main()\n" +
-//        "{\n" +
-//        "    Color = color;\n" +
-//        "    Texcoord = vec2(texcoord.x * eyeScalingFactor, 0.0);\n" +
-//        "    gl_Position = mvp * vec4(position, 1.0);\n" +
-//        "}";
-//    
-//    private static final String fragShaderSource = 
-//        "#version 150 core\n" +
-//        "in vec3 Color;\n" +
-//        "in vec2 Texcoord;\n" +
-//        "out vec4 outColor;\n" +
-//        "uniform sampler2D tex;\n" +
-//        "void main()\n" +
-//        "{\n" +
-//        "    outColor = vec4(Color, 1.0) * texture(tex, Texcoord);\n" +
-//        "}";
     
     @Override
     public void init(GLAutoDrawable glad) {
@@ -515,8 +431,27 @@ public class GLSimpleStuff implements GLEventListener, KeyListener {
         this.textureJet.setTexParameteri(gl, GL3.GL_TEXTURE_MIN_FILTER, GL3.GL_LINEAR);
         this.textureJet.setTexParameteri(gl, GL3.GL_TEXTURE_MAG_FILTER, GL3.GL_LINEAR);
         
+        // Framebuffer Setup
+        a = new int[1];
+        gl.glGenFramebuffers(a.length, a, 0);
+        this.framebufferJet = a[0];
+        gl.glBindFramebuffer(GL3.GL_FRAMEBUFFER, this.framebufferJet);
+        gl.glViewport(0, 0, 2048, 2048);
+        gl.glFramebufferTexture2D(GL3.GL_FRAMEBUFFER, GL3.GL_COLOR_ATTACHMENT0, GL3.GL_TEXTURE_2D, this.textureJet.getTextureObject(), 0);
+        gl.glBindFramebuffer(GL3.GL_FRAMEBUFFER, 0);
+        
+        // Get line sizes
+        float[] b = new float[2];
+        gl.glGetFloatv(GL3.GL_LINE_WIDTH, b, 0);
+        this.lineSize = b[0];
+        gl.glGetFloatv(GL3.GL_LINE_WIDTH_RANGE, b, 0);
+        this.maxLineSize = Math.max(b[0], b[1]);
+        
     }
 
+    private float lineSize;
+    private float maxLineSize;
+    
     @Override
     public void dispose(GLAutoDrawable glad) {
         
@@ -548,6 +483,7 @@ public class GLSimpleStuff implements GLEventListener, KeyListener {
         gl.glEnable(GL3.GL_BLEND);
         gl.glBlendEquation(GL3.GL_FUNC_ADD);
         gl.glBlendFunc(GL3.GL_SRC_ALPHA, GL3.GL_ONE_MINUS_SRC_ALPHA);
+        gl.glLineWidth(this.lineSize);
         
         // First Draw
         gl.glUseProgram(this.program);
@@ -600,7 +536,21 @@ public class GLSimpleStuff implements GLEventListener, KeyListener {
             this.textureSimpleIcon.disable(gl);
         }
         
-        // Third Draw - Simple Jet Texture
+        // Third Draw - Border on the framebuffer object
+        gl.glBindFramebuffer(GL3.GL_FRAMEBUFFER, this.framebufferJet);
+        
+        gl.glUseProgram(this.ssProgram);
+        gl.glBindBuffer(GL3.GL_ARRAY_BUFFER, this.vboScreenSpace);
+        gl.glViewport(0, 0, 2048, 2048);
+        
+        gl.glEnableVertexAttribArray(this.ssAttribLocation);
+        gl.glVertexAttribPointer(this.ssAttribLocation, 2, GL3.GL_FLOAT, false, 2 * Buffers.SIZEOF_FLOAT, 0);
+        gl.glLineWidth(this.maxLineSize);
+        gl.glDrawArrays(GL3.GL_LINE_LOOP, 0, 4);
+        gl.glViewport(0, 0, WIDTH, HEIGHT);
+        gl.glBindFramebuffer(GL3.GL_FRAMEBUFFER, 0);
+        
+        // Fourth Draw - Simple Jet Texture
         gl.glUseProgram(this.programJet);
         gl.glBindBuffer(GL3.GL_ARRAY_BUFFER, this.vboJet);
         
@@ -626,13 +576,13 @@ public class GLSimpleStuff implements GLEventListener, KeyListener {
         
         this.textureJet.disable(gl);
         
-        gl.glDisable(GL3.GL_DEPTH_TEST);
         gl.glUseProgram(this.ssProgram);
         gl.glBindBuffer(GL3.GL_ARRAY_BUFFER, this.vboScreenSpace);
         
         gl.glEnableVertexAttribArray(this.ssAttribLocation);
         gl.glVertexAttribPointer(this.ssAttribLocation, 2, GL3.GL_FLOAT, false, 2 * Buffers.SIZEOF_FLOAT, 0);
-        
+
+        gl.glLineWidth(this.maxLineSize);
         gl.glDrawArrays(GL3.GL_LINE_LOOP, 0, 4);
         
 //        GL2 gl2 = glad.getGL().getGL2();
